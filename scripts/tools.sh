@@ -65,44 +65,52 @@ pulumi-trash() {
         echo "Deletion cancelled."
     fi
 }
+
 export-d1() {
     if [ -z "$1" ]; then
         echo "Usage: export-d1 <stackname>"
         return 1
     fi
     local full_name=$1
-    local service_name="${full_name%%-*}"
     local config_path="pulumi/instances/$full_name/wrangler.toml"
     
     if [ ! -f "$config_path" ]; then
         echo "Error: Configuration file not found: $config_path"
         return 1
     fi
+
+    local db_name
+    db_name=$(awk -F'"' '/^\[\[d1_databases\]\]/{found=1} found && /database_name/{print $2; exit}' "$config_path")
+
+    if [ -z "$db_name" ]; then
+        echo "Error: Could not find database_name in $config_path"
+        return 1
+    fi
+
+    echo "Exporting data for: $full_name, Database: $db_name"
     
-    echo "Exporting data for: $full_name, Database: d1_db_$service_name"
-    
-    npx wrangler d1 export "d1_db_$service_name" \
+    npx wrangler d1 export "$db_name" \
         --remote \
-        --output="./data-${service_name}.sql" \
+        --output="./data-${full_name}.sql" \
         --no-schema \
         --config "$config_path"
     
     if [ $? -eq 0 ]; then
-        echo "Export completed: ./data-${service_name}.sql"
+        echo "Export completed: ./data-${full_name}.sql"
     else
         echo "Export failed"
         return 1
     fi
 }
+
 import-d1() {
     if [ -z "$1" ]; then
         echo "Usage: import-d1 <stackname> [sql_file]"
         return 1
     fi
     local full_name=$1
-    local service_name="${full_name%%-*}"
     local config_path="pulumi/instances/$full_name/wrangler.toml"
-    local sql_file="${2:-./data-${service_name}.sql}"
+    local sql_file="${2:-./data-${full_name}.sql}"
     
     if [ ! -f "$config_path" ]; then
         echo "Error: Configuration file not found: $config_path"
@@ -112,8 +120,16 @@ import-d1() {
         echo "Error: SQL file not found: $sql_file"
         return 1
     fi
+
+    local db_name
+    db_name=$(awk -F'"' '/^\[\[d1_databases\]\]/{found=1} found && /database_name/{print $2; exit}' "$config_path")
+
+    if [ -z "$db_name" ]; then
+        echo "Error: Could not find database_name in $config_path"
+        return 1
+    fi
     
-    echo "SQL: $sql_file,Database: d1_db_$service_name , Config: $config_path"
+    echo "SQL: $sql_file, Database: $db_name, Config: $config_path"
     
     printf "This will overwrite existing data. Continue? (y/N) "
     read response
@@ -122,7 +138,7 @@ import-d1() {
         * ) echo "Aborted"; return 1;;
     esac
     
-    npx wrangler d1 execute "d1_db_$service_name" \
+    npx wrangler d1 execute "$db_name" \
         --remote \
         --file="$sql_file" \
         --config "$config_path"
@@ -134,6 +150,7 @@ import-d1() {
         return 1
     fi
 }
+
 gitacp() {
     git add -A && git commit -m "$*" && git push && git --no-pager diff --name-status HEAD~1
 }
