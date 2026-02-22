@@ -3,10 +3,11 @@ pulumi-list() {
     echo "npm run pulumi:list";
     npm run pulumi:list;
 }
-pulumi-cleanup() { 
-    pulumi-list;
-    echo "npm run pulumi:cleanup -- --stack $1";
-    npm run pulumi:cleanup -- --stack $1 ; 
+pulumi-cleanup() {
+    pulumi-list
+    STACK="${1:-$(pulumi stack --show-name --cwd pulumi/)}"
+    echo "npm run pulumi:cleanup -- --stack $STACK"
+    npm run pulumi:cleanup -- --stack "$STACK"
 }
 pulumi-setup() { 
     echo "npm run pulumi:setup -- --properties ../$1"
