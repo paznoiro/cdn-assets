@@ -15,7 +15,7 @@ pulumi-setup() {
 }
 pulumi-trash() {
     # Use argument if provided, otherwise use current Pulumi stack
-    local SEARCH_NAME="${1:-$(pulumi stack --show-name 2>/dev/null)}"
+    local SEARCH_NAME="${1:-$(pulumi stack --show-name  --cwd pulumi 2>/dev/null)}"
 
     if [ -z "$SEARCH_NAME" ]; then
         echo "❌ No stack provided and no active Pulumi stack found"
