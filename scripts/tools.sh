@@ -14,45 +14,51 @@ pulumi-setup() {
     npm run pulumi:setup -- --properties "../$1"; 
 }
 pulumi-trash() {
-    if [ -z "$1" ]; then
+    # Use argument if provided, otherwise use current Pulumi stack
+    local SEARCH_NAME="${1:-$(pulumi stack --show-name 2>/dev/null)}"
+
+    if [ -z "$SEARCH_NAME" ]; then
+        echo "❌ No stack provided and no active Pulumi stack found"
         echo "Usage: pulumi-trash <stackname>"
         return 1
     fi
-    local SEARCH_NAME="$1"
+
     local SEARCH_DIR="./pulumi"
-    
+
     # Check if pulumi directory exists
     if [ ! -d "$SEARCH_DIR" ]; then
         echo "Error: Directory '$SEARCH_DIR' does not exist"
         return 1
     fi
-    
+
     echo "Searching for files and folders named: $SEARCH_NAME"
     echo "Search directory: $SEARCH_DIR"
     echo "================================================"
-    
+
     # Find all matching files and directories
-    local MATCHES=$(find "$SEARCH_DIR" -name "$SEARCH_NAME" 2>/dev/null)
-    
+    local MATCHES
+    MATCHES=$(find "$SEARCH_DIR" -name "$SEARCH_NAME" 2>/dev/null)
+
     if [ -z "$MATCHES" ]; then
         echo "No matches found for '$SEARCH_NAME'"
         return 0
     fi
-    
-    # Display all matches
+
+    # Display matches
     echo "Found the following matches:"
     echo "$MATCHES"
     echo ""
-    
+
     # Count matches
-    local COUNT=$(echo "$MATCHES" | wc -l)
+    local COUNT
+    COUNT=$(echo "$MATCHES" | wc -l | tr -d ' ')
     echo "Total matches: $COUNT"
     echo ""
-    
-    # Ask for confirmation
+
+    # Confirmation
     printf "Do you want to delete all these files/folders? (yes/no): "
     read CONFIRM
-    
+
     if [ "$CONFIRM" = "yes" ]; then
         echo "Deleting..."
         echo "$MATCHES" | while read -r item; do
@@ -66,7 +72,6 @@ pulumi-trash() {
         echo "Deletion cancelled."
     fi
 }
-
 export-d1() {
     if [ -z "$1" ]; then
         echo "Usage: export-d1 <stackname>"
