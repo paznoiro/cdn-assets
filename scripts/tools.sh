@@ -226,3 +226,5 @@ gitinit () {
 
   git status
 }
+alias plist=pulumi-list
+alias pclean=pulumi-cleanup
