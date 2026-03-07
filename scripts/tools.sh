@@ -226,5 +226,16 @@ gitinit () {
 
   git status
 }
+claude_lmStudio_set(){
+  export ANTHROPIC_BASE_URL="http://localhost:1234"
+  export ANTHROPIC_AUTH_TOKEN="lmstudio"
+  echo "Anthropic env enabled"
+}
+claude_clear(){
+  unset ANTHROPIC_BASE_URL
+  unset ANTHROPIC_AUTH_TOKEN
+  echo "Anthropic env disabled"
+}
+
 alias plist=pulumi-list
 alias pclean=pulumi-cleanup
