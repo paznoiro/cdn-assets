@@ -237,5 +237,20 @@ claude_clear(){
   echo "Anthropic env disabled"
 }
 
+cf_setup(){
+    unset CLOUDFLARE_ACCOUNT_ID
+    unset CLOUDFLARE_API_TOKEN
+    export CLOUDFLARE_ACCOUNT_ID=$(doppler secrets get CLOUDFLARE_ACCOUNT_ID \
+      --project cloudflare \
+      --config $1 \
+      --plain)
+
+    export CLOUDFLARE_API_TOKEN=$(doppler secrets get CLOUDFLARE_API_TOKEN \
+      --project cloudflare \
+      --config $1 \
+      --plain)
+}
+
+
 alias plist=pulumi-list
 alias pclean=pulumi-cleanup
