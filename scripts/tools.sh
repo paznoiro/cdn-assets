@@ -226,11 +226,17 @@ gitinit () {
 
   git status
 }
-claude_lmStudio_set(){
+claude_lmstudio(){
   export ANTHROPIC_BASE_URL="http://localhost:1234"
   export ANTHROPIC_AUTH_TOKEN="lmstudio"
   echo "Anthropic env enabled"
 }
+claude_zenmux(){
+  export ANTHROPIC_BASE_URL="https://zenmux.ai/api/anthropic"
+  export ANTHROPIC_AUTH_TOKEN=${ZENMUX_API_KEY}
+  echo "Zenmux Anthropic env enabled"
+}
+
 claude_clear(){
   unset ANTHROPIC_BASE_URL
   unset ANTHROPIC_AUTH_TOKEN
