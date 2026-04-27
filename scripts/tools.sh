@@ -72,6 +72,27 @@ pulumi-trash() {
         echo "Deletion cancelled."
     fi
 }
+
+dbmigrate() {
+  if [ $# -lt 3 ]; then
+    echo "Usage: dbmigrate <env> <service> <tenant> [schema]"
+    return 1
+  fi
+
+  local env=$1
+  local service=$2
+  local tenant=$3
+  local schema=${4:-$service}   # default schema = service
+
+  ./deploy-scripts/migrate.sh \
+    --conf ${service}-api/deploy/${env}.conf \
+    --service ${service}-api \
+    --mode single-schema \
+    --schema-name ${schema} \
+    --tenant ${tenant} \
+    --with-seed
+}
+
 export-d1() {
     if [ -z "$1" ]; then
         echo "Usage: export-d1 <stackname>"
