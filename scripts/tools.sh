@@ -72,7 +72,22 @@ pulumi-trash() {
         echo "Deletion cancelled."
     fi
 }
+zapdeploy() {
+  if [ $# -ne 2 ]; then
+    echo "Usage: zapdeploy <service> <env> , Example: zapdeploy production deploy"
+    return 1
+  fi
 
+  local config="$1-api/deploy/$2.conf"
+  if [ ! -f "$config" ]; then
+    echo "❌ Config file not found: $config"
+    return 1
+  fi
+  echo "🚀 Running deploy with config: $config"
+  echo "./deploy-scripts/deploy.sh --config $config"
+
+  ./deploy-scripts/deploy.sh --config "$config"
+}
 dbmigrate() {
   if [ $# -lt 3 ]; then
     echo "Usage: dbmigrate <env> <service> <tenant> [schema]"
