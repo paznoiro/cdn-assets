@@ -293,6 +293,32 @@ cf_setup(){
       --plain)
 }
 
+gcloud_zap_setup(){
+    unset EMBED_API_KEY
+    unset LLM_KEY
+    unset POSTGRES_DB_PASS
+    unset QDRANT_API_KEY
+    export EMBED_API_KEY=$(doppler secrets get EMBED_API_KEY \
+      --project gcloud-zap \
+      --config $1 \
+      --plain)
+
+    export LLM_KEY=$(doppler secrets get LLM_KEY \
+      --project gcloud-zap \
+      --config $1 \
+      --plain)
+
+    export POSTGRES_DB_PASS=$(doppler secrets get POSTGRES_DB_PASS \
+      --project gcloud-zap \
+      --config $1 \
+      --plain)
+
+    export QDRANT_API_KEY=$(doppler secrets get QDRANT_API_KEY \
+      --project gcloud-zap \
+      --config $1 \
+      --plain)
+
+}
 
 alias plist=pulumi-list
 alias pclean=pulumi-cleanup
