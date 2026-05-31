@@ -295,7 +295,7 @@ cf_setup(){
 
 gcloud_zap_setup(){
     unset EMBED_API_KEY
-    unset LLM_KEY
+    unset LLM_API_KEY
     unset POSTGRES_DB_PASS
     unset QDRANT_API_KEY
     export EMBED_API_KEY=$(doppler secrets get EMBED_API_KEY \
@@ -303,7 +303,7 @@ gcloud_zap_setup(){
       --config $1 \
       --plain)
 
-    export LLM_KEY=$(doppler secrets get LLM_KEY \
+    export LLM_API_KEY=$(doppler secrets get LLM_API_KEY \
       --project gcloud-zap \
       --config $1 \
       --plain)
