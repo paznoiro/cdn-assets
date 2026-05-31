@@ -84,9 +84,9 @@ zapdeploy() {
     return 1
   fi
   echo "🚀 Running deploy with config: $config"
-  echo "./deploy-scripts/deploy.sh --config $config"
+  echo "../deploy-scripts/gcloud-deploy-jib.sh --config $config"
 
-  ./deploy-scripts/deploy.sh --config "$config"
+  ./deploy-scripts/gcloud-deploy-jib.sh --config "$config"
 }
 dbmigrate() {
   if [ $# -lt 3 ]; then
