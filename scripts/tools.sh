@@ -319,6 +319,15 @@ gcloud_zap_setup(){
       --plain)
 
 }
+filebase-s3() {
+    aws configure set aws_access_key_id "$FILEBASE_ACCESS_KEY"
+    aws configure set aws_secret_access_key "$FILEBASE_SECRET_KEY"
+    aws configure set default.region "us-east-1"
 
+    export AWS_ENDPOINT_URL="https://s3.filebase.com"
+    alias aws-fb='aws --endpoint https://s3.filebase.io'
+
+    echo "Filebase S3 configured"
+}
 alias plist=pulumi-list
 alias pclean=pulumi-cleanup
