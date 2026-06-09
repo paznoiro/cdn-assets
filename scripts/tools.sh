@@ -234,6 +234,11 @@ gitpulumisub () {
 
   git submodule status
 }
+gitpush() {
+    git add .
+    git commit -m "${1:-Update code}"
+    git push 
+}
 gitinit () {
   if [ -z "$1" ]; then
     echo "Usage: gitinit <repo-url>"
