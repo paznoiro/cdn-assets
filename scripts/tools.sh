@@ -298,32 +298,71 @@ cf_setup(){
       --plain)
 }
 
-gcloud_zap_setup(){
-    unset EMBED_API_KEY
-    unset LLM_API_KEY
-    unset POSTGRES_DB_PASS
-    unset QDRANT_API_KEY
-    export EMBED_API_KEY=$(doppler secrets get EMBED_API_KEY \
-      --project gcloud-zap \
-      --config $1 \
-      --plain)
+gcloud_zap_setup() {
+  local config="$1"
 
-    export LLM_API_KEY=$(doppler secrets get LLM_API_KEY \
-      --project gcloud-zap \
-      --config $1 \
-      --plain)
+  if [ -z "$config" ]; then
+    echo "Error: Doppler config is required"
+    echo "Usage: gcloud_zap_setup <config>"
+    echo "Example: gcloud_zap_setup dev"
+    return 1
+  fi
 
-    export POSTGRES_DB_PASS=$(doppler secrets get POSTGRES_DB_PASS \
-      --project gcloud-zap \
-      --config $1 \
-      --plain)
+  if ! command -v doppler >/dev/null 2>&1; then
+    echo "Error: doppler CLI is not installed or not in PATH"
+    return 1
+  fi
 
-    export QDRANT_API_KEY=$(doppler secrets get QDRANT_API_KEY \
-      --project gcloud-zap \
-      --config $1 \
-      --plain)
+  unset EMBED_API_KEY
+  unset LLM_API_KEY
+  unset POSTGRES_DB_PASS
+  unset QDRANT_API_KEY
+  
+  export EMBED_API_KEY
+  export LLM_API_KEY
+  export POSTGRES_DB_PASS
+  export QDRANT_API_KEY
 
+  EMBED_API_KEY=$(doppler secrets get EMBED_API_KEY \
+    --project gcloud-zap \
+    --config "$config" \
+    --plain) || {
+      echo "Error: failed to load EMBED_API_KEY"
+      return 1
+    }
+
+  LLM_API_KEY=$(doppler secrets get LLM_API_KEY \
+    --project gcloud-zap \
+    --config "$config" \
+    --plain) || {
+      echo "Error: failed to load LLM_API_KEY"
+      return 1
+    }
+
+  POSTGRES_DB_PASS=$(doppler secrets get POSTGRES_DB_PASS \
+    --project gcloud-zap \
+    --config "$config" \
+    --plain) || {
+      echo "Error: failed to load POSTGRES_DB_PASS"
+      return 1
+    }
+
+  QDRANT_API_KEY=$(doppler secrets get QDRANT_API_KEY \
+    --project gcloud-zap \
+    --config "$config" \
+    --plain) || {
+      echo "Error: failed to load QDRANT_API_KEY"
+      return 1
+    }
+
+  export EMBED_API_KEY
+  export LLM_API_KEY
+  export POSTGRES_DB_PASS
+  export QDRANT_API_KEY
+
+  echo "gcloud-zap secrets loaded for config: $config"
 }
+
 filebase-s3() {
     aws configure set aws_access_key_id "$FILEBASE_ACCESS_KEY"
     aws configure set aws_secret_access_key "$FILEBASE_SECRET_KEY"
