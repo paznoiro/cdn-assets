@@ -88,6 +88,27 @@ zapdeploy() {
 
   ./deploy-scripts/gcloud-deploy-jib.sh --config "$config"
 }
+
+dbclean() {
+  if [ $# -lt 3 ]; then
+    echo "Usage: dbclean <env> <service> <tenant> [schema]"
+    return 1
+  fi
+
+  local env=$1
+  local service=$2
+  local tenant=$3
+  local schema=${4:-$service}
+
+  ./deploy-scripts/cleanup-tenant.sh \
+    --service "${service}-api" \
+    --conf "${service}-api/deploy/${env}.conf" \
+    --tenant "${tenant}" \
+    --mode single-schema \
+    --schema-name "${schema}"
+}
+
+
 dbmigrate() {
   if [ $# -lt 3 ]; then
     echo "Usage: dbmigrate <env> <service> <tenant> [schema]"
