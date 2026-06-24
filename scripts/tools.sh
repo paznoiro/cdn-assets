@@ -367,6 +367,20 @@ gcloud_zap_setup() {
       echo "Error: failed to load POSTGRES_DB_PASS"
       return 1
     }
+  EMPLOYEE_DB_PASS=$(doppler secrets get EMPLOYEE_DB_PASS \
+    --project gcloud-zap \
+    --config "$config" \
+    --plain) || {
+      echo "Error: failed to load POSTGRES_DB_PASS"
+      return 1
+    }
+  POSTGRES_DB_PASS_SPRING=$(doppler secrets get POSTGRES_DB_PASS_SPRING \
+    --project gcloud-zap \
+    --config "$config" \
+    --plain) || {
+      echo "Error: failed to load POSTGRES_DB_PASS"
+      return 1
+    }
 
   QDRANT_API_KEY=$(doppler secrets get QDRANT_API_KEY \
     --project gcloud-zap \
