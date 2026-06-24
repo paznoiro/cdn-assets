@@ -394,7 +394,9 @@ gcloud_zap_setup() {
   export LLM_API_KEY
   export POSTGRES_DB_PASS
   export QDRANT_API_KEY
-
+  export EMPLOYEE_DB_PASS
+  export POSTGRES_DB_PASS_SPRING
+    
   echo "gcloud-zap secrets loaded for config: $config"
 }
 
