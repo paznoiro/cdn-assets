@@ -305,99 +305,60 @@ claude_clear(){
   echo "Anthropic env disabled"
 }
 
-cf_setup(){
+load_doppler_secrets() {
+    local project="$1"
+    local config="$2"
+    shift 2
+
+    [[ -z "$project" || -z "$config" ]] && {
+        echo "Usage: load_doppler_secrets <project> <config> <secret1> [secret2 ...]"
+        return 1
+    }
+    command -v doppler >/dev/null 2>&1 || {
+        echo "Error: doppler CLI is not installed or not in PATH"
+        return 1
+    }
+
+    local secret value
+    for secret in "$@"; do
+        unset "$secret"
+        value=$(doppler secrets get "$secret" --project "$project" --config "$config" --plain) || {
+            echo "Error: failed to load $secret"
+            return 1
+        }
+        export "$secret=$value"
+    done
+    echo "Loaded $# secrets from '$project' ($config)"
+}
+
+cf_setup() {
+    local config="$1"
     unset CLOUDFLARE_ACCOUNT_ID
     unset CLOUDFLARE_API_TOKEN
-    export CLOUDFLARE_ACCOUNT_ID=$(doppler secrets get CLOUDFLARE_ACCOUNT_ID \
-      --project cloudflare \
-      --config $1 \
-      --plain)
-
-    export CLOUDFLARE_API_TOKEN=$(doppler secrets get CLOUDFLARE_API_TOKEN \
-      --project cloudflare \
-      --config $1 \
-      --plain)
+    load_doppler_secrets cloudflare "$config" \
+        CLOUDFLARE_ACCOUNT_ID \
+        CLOUDFLARE_API_TOKEN
 }
 
 gcloud_zap_setup() {
-  local config="$1"
+    local config="$1"
 
-  if [ -z "$config" ]; then
-    echo "Error: Doppler config is required"
-    echo "Usage: gcloud_zap_setup <config>"
-    echo "Example: gcloud_zap_setup dev"
-    return 1
-  fi
-
-  if ! command -v doppler >/dev/null 2>&1; then
-    echo "Error: doppler CLI is not installed or not in PATH"
-    return 1
-  fi
-
-  unset EMBED_API_KEY
-  unset LLM_API_KEY
-  unset POSTGRES_DB_PASS
-  unset QDRANT_API_KEY
-  
-  export EMBED_API_KEY
-  export LLM_API_KEY
-  export POSTGRES_DB_PASS
-  export QDRANT_API_KEY
-
-  EMBED_API_KEY=$(doppler secrets get EMBED_API_KEY \
-    --project gcloud-zap \
-    --config "$config" \
-    --plain) || {
-      echo "Error: failed to load EMBED_API_KEY"
-      return 1
-    }
-
-  LLM_API_KEY=$(doppler secrets get LLM_API_KEY \
-    --project gcloud-zap \
-    --config "$config" \
-    --plain) || {
-      echo "Error: failed to load LLM_API_KEY"
-      return 1
-    }
-
-  POSTGRES_DB_PASS=$(doppler secrets get POSTGRES_DB_PASS \
-    --project gcloud-zap \
-    --config "$config" \
-    --plain) || {
-      echo "Error: failed to load POSTGRES_DB_PASS"
-      return 1
-    }
-  EMPLOYEE_DB_PASS=$(doppler secrets get EMPLOYEE_DB_PASS \
-    --project gcloud-zap \
-    --config "$config" \
-    --plain) || {
-      echo "Error: failed to load POSTGRES_DB_PASS"
-      return 1
-    }
-  POSTGRES_DB_PASS_SPRING=$(doppler secrets get POSTGRES_DB_PASS_SPRING \
-    --project gcloud-zap \
-    --config "$config" \
-    --plain) || {
-      echo "Error: failed to load POSTGRES_DB_PASS"
-      return 1
-    }
-
-  QDRANT_API_KEY=$(doppler secrets get QDRANT_API_KEY \
-    --project gcloud-zap \
-    --config "$config" \
-    --plain) || {
-      echo "Error: failed to load QDRANT_API_KEY"
-      return 1
-    }
-
-  export EMBED_API_KEY
-  export LLM_API_KEY
-  export POSTGRES_DB_PASS
-  export QDRANT_API_KEY
-  export EMPLOYEE_DB_PASS
-  export POSTGRES_DB_PASS_SPRING
-    
-  echo "gcloud-zap secrets loaded for config: $config"
+    load_doppler_secrets gcloud-zap "$config" \
+        EMBED_API_KEY \
+        LLM_API_KEY \
+        POSTGRES_DB_PASS \
+        EMPLOYEE_DB_PASS \
+        POSTGRES_DB_PASS_SPRING \
+        QDRANT_API_KEY
+}
+db_setup() {
+    local config="$1"
+    load_doppler_secrets db "$config" \
+        DB_DIRECT_URL \
+        DB_HOST \
+        DB_JDBC_URL \
+        DB_PWD \
+        DB_USER
 }
 
 filebase-s3() {
