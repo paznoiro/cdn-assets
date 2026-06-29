@@ -327,6 +327,8 @@ load_doppler_secrets() {
             return 1
         }
         export "$secret=$value"
+        echo "✓ $secret"
+
     done
     echo "Loaded $# secrets from '$project' ($config)"
 }
