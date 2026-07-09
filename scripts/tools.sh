@@ -362,6 +362,7 @@ db_setup() {
         DB_PWD \
         DB_USER
 }
+alias docker-restart='pkill -9 Docker com.docker.backend com.docker.virtualization vpnkit dockerd containerd 2>/dev/null; open -a Docker'
 
 filebase-s3() {
     aws configure set aws_access_key_id "$FILEBASE_ACCESS_KEY"
