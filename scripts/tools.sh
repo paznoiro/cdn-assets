@@ -304,7 +304,14 @@ claude_clear(){
   unset ANTHROPIC_AUTH_TOKEN
   echo "Anthropic env disabled"
 }
-
+env_setup() {
+  if [ -z "$1" ] || [ -z "$2" ]; then
+    echo "❌ Usage: envload <project-name> <config-name>"
+    return 1
+  fi
+  eval $(doppler secrets download -p "$1" -c "$2" --format docker --no-file)
+  echo "✅ Secrets loaded into environment for $1 ($2)!"
+}
 load_doppler_secrets() {
     local project="$1"
     local config="$2"
