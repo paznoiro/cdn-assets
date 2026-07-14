@@ -306,13 +306,18 @@ claude_clear(){
 }
 env_setup() {
   if [ -z "$1" ] || [ -z "$2" ]; then
-    echo "❌ Usage: envload <project-name> <config-name>"
+    echo "Usage: env_setup <project> <config>"
     return 1
   fi
-  eval $(doppler secrets download -p "$1" -c "$2" --format docker --no-file)
+
+  set -a
+  eval "$(doppler secrets download -p "$1" -c "$2" --format docker --no-file)"
+  set +a
+
   doppler secrets --only-names -p "$1" -c "$2"
-  echo "✅ Secrets loaded into environment for $1 ($2)!"
+  echo "✅ Secrets loaded into environment for $1 ($2)"
 }
+
 load_doppler_secrets() {
     local project="$1"
     local config="$2"
