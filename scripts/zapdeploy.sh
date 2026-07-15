@@ -58,7 +58,7 @@ done
 
 # ---- parse properties ------------------------------------------------------
 ENV_LINES=()
-SSH_HOST="" ; SSH_USER="ubuntu" ; SSH_KEY="" ; REMOTE_DIR=""
+SSH_HOST="" ; SSH_PORT="22" ; SSH_USER="ubuntu" ; SSH_KEY="" ; REMOTE_DIR=""
 IMAGE_REPO="" ; DOPPLER_PROJECT="" ; DOPPLER_CONFIG=""
 INIT_POSTGRES_DSN="" ; DOCKER_NETWORK=""
 CADDY_SITE_TEMPLATE="" ; CADDY_DOMAIN="" ; CADDY_SITES_DIR="/opt/caddy/sites" ; CADDY_CONTAINER="caddy"
@@ -82,6 +82,7 @@ while IFS= read -r line || [[ -n "$line" ]]; do
   else
     case "$key" in
       SSH_HOST)             SSH_HOST="$value" ;;
+      SSH_PORT)             SSH_PORT="$value" ;;
       SSH_USER)             SSH_USER="$value" ;;
       SSH_KEY)              SSH_KEY="$value" ;;
       REMOTE_DIR)           REMOTE_DIR="$value" ;;
@@ -133,7 +134,7 @@ if [[ -n "$DOPPLER_PROJECT" ]]; then
 fi
 
 # ---- resolve regular properties --------------------------------------------
-for var in SSH_HOST SSH_USER SSH_KEY REMOTE_DIR IMAGE_REPO DOPPLER_PROJECT DOPPLER_CONFIG INIT_POSTGRES_DSN DOCKER_NETWORK CADDY_SITE_TEMPLATE CADDY_DOMAIN CADDY_SITES_DIR CADDY_CONTAINER HEALTHCHECK_TYPE HEALTHCHECK_TARGET COMPOSE_FILE_LOCAL UPLOAD_FILES; do
+for var in SSH_HOST SSH_PORT SSH_USER SSH_KEY REMOTE_DIR IMAGE_REPO DOPPLER_PROJECT DOPPLER_CONFIG INIT_POSTGRES_DSN DOCKER_NETWORK CADDY_SITE_TEMPLATE CADDY_DOMAIN CADDY_SITES_DIR CADDY_CONTAINER HEALTHCHECK_TYPE HEALTHCHECK_TARGET COMPOSE_FILE_LOCAL UPLOAD_FILES; do
   val="${!var}"
   if [[ -n "$val" ]]; then
     val="$(resolve_vars "$val")"
@@ -155,7 +156,9 @@ SSH_KEY_FINAL="${SSH_KEY_OVERRIDE:-$SSH_KEY}"
 COMPOSE_FILE="${COMPOSE_FILE_OVERRIDE:-$COMPOSE_FILE_LOCAL}"
 [[ -f "$COMPOSE_FILE" ]] || err "compose file not found: $COMPOSE_FILE"
 
-SSH_CMD=(ssh -i "$SSH_KEY_FINAL" -o StrictHostKeyChecking=accept-new "$SSH_USER@$SSH_HOST")
+SSH_PORT_ARGS=()
+[[ -n "$SSH_PORT" ]] && SSH_PORT_ARGS=("-p" "$SSH_PORT")
+SSH_CMD=(ssh "${SSH_PORT_ARGS[@]}" -i "$SSH_KEY_FINAL" -o StrictHostKeyChecking=accept-new "$SSH_USER@$SSH_HOST")
 echo "==> Target: $SSH_USER@$SSH_HOST:$REMOTE_DIR"
 
 # ---- resolve ENV.* -> tmp .env ---------------------------------------------
@@ -249,7 +252,9 @@ echo "==> Copying compose file"
       f="${f#"${f%%[![:space:]]*}"}"
       f="${f%"${f##*[![:space:]]}"}"
       [[ -z "$f" ]] && continue
-      scp -i "$SSH_KEY_FINAL" -o StrictHostKeyChecking=accept-new -r "$f" "$SSH_USER@$SCP_HOST:$REMOTE_DIR/"
+      SCP_PORT_ARGS=()
+      [[ -n "$SSH_PORT" ]] && SCP_PORT_ARGS=("-P" "$SSH_PORT")
+      scp "${SCP_PORT_ARGS[@]}" -i "$SSH_KEY_FINAL" -o StrictHostKeyChecking=accept-new -r "$f" "$SSH_USER@$SCP_HOST:$REMOTE_DIR/"
     done
   fi
 
