@@ -8,31 +8,8 @@
 #   zap-docker-deploy <config.properties>
 # ---------------------------------------------------------------------------
 
-# Determine the correct path to this script whether sourced in bash or zsh
-if [ -n "${ZSH_VERSION:-}" ]; then
-  ZAP_SCRIPT_PATH="${(%):-%x}"
-else
-  ZAP_SCRIPT_PATH="${BASH_SOURCE[0]}"
-fi
-
 zap-docker-deploy() {
-  bash "$ZAP_SCRIPT_PATH" __execute "$@"
-}
-
-if [[ "${1:-}" != "__execute" ]]; then
-  if command -v docker >/dev/null 2>&1 && command -v ssh >/dev/null 2>&1; then
-    echo "==> [OK] Dependency check passed (docker, ssh found)."
-  else
-    echo "==> [WARNING] Basic dependencies (docker, ssh) are missing."
-  fi
-  echo "==> Command 'zap-docker-deploy' is ready!"
-  return 0 2>/dev/null || exit 0
-fi
-shift # remove __execute
-
-# ==============================================================================
-# MAIN BASH EXECUTION (Only runs when called via bash)
-# ==============================================================================
+  bash -c "$(cat << 'EOF_ZAPDEPLOY'
 set -euo pipefail
 
 err() { echo "ERROR: $*" >&2; exit 1; }
@@ -218,7 +195,7 @@ trap 'echo ""; echo "!!! DEPLOY FAILED !!!"; rm -f "$RESOLVED_ENV"' ERR
 
 # ---- remote setup hooks ----------------------------------------------------
 echo "==> Ensuring remote directory exists"
-"${SSH_CMD[@]}" "sudo mkdir -p '$REMOTE_DIR' && sudo chown -R \$USER '$REMOTE_DIR'"
+"${SSH_CMD[@]}" "sudo mkdir -p '$REMOTE_DIR' && sudo chown -R \$(whoami) '$REMOTE_DIR'"
 
 if [[ -n "$DOCKER_NETWORK" ]]; then
   echo "==> Ensuring external docker network '$DOCKER_NETWORK' exists"
@@ -233,14 +210,14 @@ if [[ -n "$INIT_POSTGRES_DSN" ]]; then
   DB_NAME="${BASE##*/}"
   MAINT_DSN="${BASE%/*}/postgres${PARAMS}"
   echo "==> Ensuring database '$DB_NAME' exists"
-  "${SSH_CMD[@]}" "sudo docker run --rm alpine/psql '$MAINT_DSN' -tAc \"SELECT 1 FROM pg_database WHERE datname='$DB_NAME'\" | grep -q 1 \
+  "${SSH_CMD[@]}" "docker run --rm alpine/psql '$MAINT_DSN' -tAc \"SELECT 1 FROM pg_database WHERE datname='$DB_NAME'\" | grep -q 1 \
     && echo '    already exists' \
-    || { sudo docker run --rm alpine/psql '$MAINT_DSN' -v ON_ERROR_STOP=1 -c 'CREATE DATABASE \"$DB_NAME\"' && echo '    created'; }"
+    || { docker run --rm alpine/psql '$MAINT_DSN' -v ON_ERROR_STOP=1 -c 'CREATE DATABASE \"$DB_NAME\"' && echo '    created'; }"
 fi
 
 if [[ -n "$CADDY_SITE_TEMPLATE" && -f "$CADDY_SITE_TEMPLATE" ]]; then
   SITE_FILE="$(mktemp 2>/dev/null || mktemp -t site-snippet)"
-  sed "s|{{DOMAIN}}|$CADDY_DOMAIN|g" "$CADDY_SITE_TEMPLATE" > "$SITE_FILE"
+  sed -e "s|{{DOMAIN}}|$CADDY_DOMAIN|g" -e "s|{{CADDY_DOMAIN}}|$CADDY_DOMAIN|g" "$CADDY_SITE_TEMPLATE" > "$SITE_FILE"
   echo "==> Writing Caddy site snippet and reloading Caddy"
   "${SSH_CMD[@]}" "sudo mkdir -p '$CADDY_SITES_DIR' && sudo tee '$CADDY_SITES_DIR/${CADDY_DOMAIN:-app}.caddy' >/dev/null" < "$SITE_FILE"
   rm -f "$SITE_FILE"
@@ -277,14 +254,15 @@ echo "==> Copying compose file"
   fi
 
 echo "==> Starting containers (in-memory .env via tmpfs)"
+
 "${SSH_CMD[@]}" '
   set -e
   TMPFILE=$(mktemp -p /dev/shm 2>/dev/null || mktemp)
   trap "rm -f \"$TMPFILE\"" EXIT
   cat > "$TMPFILE"
   cd "'"$REMOTE_DIR"'"
-  sudo docker compose --env-file "$TMPFILE" pull
-  sudo docker compose --env-file "$TMPFILE" up -d
+  docker compose --env-file "$TMPFILE" pull
+  docker compose --env-file "$TMPFILE" up -d
 ' < "$RESOLVED_ENV"
 
 # ---- health check ----------------------------------------------------------
@@ -326,4 +304,21 @@ if [[ -n "$IMAGE_REPO" ]]; then
   fi
 fi
 
+echo "==> App answering on $CADDY_DOMAIN. Deployed $IMAGE_REPO:$TAG_OVERRIDE"
 echo "==> Deploy Completed Successfully!"
+
+EOF_ZAPDEPLOY
+)" -- "$@"
+}
+
+# If executed directly as a script, run the function.
+if [[ "${BASH_SOURCE[0]}" == "${0}" ]] && [[ -z "${ZSH_VERSION:-}" ]]; then
+  zap-docker-deploy "$@"
+else
+  if command -v docker >/dev/null 2>&1 && command -v ssh >/dev/null 2>&1; then
+    echo "==> [OK] Dependency check passed (docker, ssh found)."
+  else
+    echo "==> [WARNING] Basic dependencies (docker, ssh) are missing."
+  fi
+  echo "==> Command 'zap-docker-deploy' is ready!"
+fi
