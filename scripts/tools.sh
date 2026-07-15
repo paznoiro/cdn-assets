@@ -223,7 +223,7 @@ gitForce(){
     git push --force origin main
 }
 gitpulumisub () {
-  SUBMODULE_URL="https://github.com/azoth-tech/pulumi-cloudflare.git"
+  SUBMODULE_URL="https://github.com/paznoiro/pulumi-cloudflare.git"
   SUBMODULE_PATH="pulumi-cloudflare"
   SUBMODULE_BRANCH="main"
 
