@@ -116,9 +116,16 @@ fi
 echo "==> Latest tag: ${LATEST:-none} -> new version: $VERSION ($BUMP bump)"
 
 if [[ "$HAS_CONFIG" -eq 1 ]]; then
-  # The config is validated relative to the current dir — pass it exactly as the
-  # pipeline resolves it (relative to zap-document-api/, e.g. run from there).
-  [[ -f "$CONFIG_FILE" ]] || err "config file not found: $CONFIG_FILE (in $(pwd)) — pass it relative to the app dir (zap-document-api/)"
+  [[ -f "$CONFIG_FILE" ]] || err "config file not found: $CONFIG_FILE (in $(pwd))"
+  # Normalize to a REPO-RELATIVE path — the pipeline resolves the config from
+  # the repo root, so zap-release may be invoked from any directory (repo root,
+  # service dir, ...) and the release notes always carry the right path.
+  CONFIG_ABS="$(cd "$(dirname "$CONFIG_FILE")" && pwd -P)/$(basename "$CONFIG_FILE")"
+  case "$CONFIG_ABS" in
+    "$ROOT_DIR"/*) CONFIG_FILE="${CONFIG_ABS#"$ROOT_DIR"/}" ;;
+    *) err "config file must live inside the repo ($ROOT_DIR): $CONFIG_ABS" ;;
+  esac
+  echo "==> Deploy config (repo-relative): $CONFIG_FILE"
 fi
 
 # ---- confirm ---------------------------------------------------------------
