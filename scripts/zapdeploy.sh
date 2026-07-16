@@ -219,12 +219,39 @@ if [[ -n "$INIT_POSTGRES_DSN" ]]; then
 fi
 
 if [[ -n "$CADDY_SITE_TEMPLATE" && -f "$CADDY_SITE_TEMPLATE" ]]; then
+  # One snippet file per app — named after the app (REMOTE_DIR basename), NOT
+  # after the domain. A CADDY_DOMAIN change then overwrites the same file
+  # instead of leaving the old domain being served from a stale snippet.
+  APP_NAME="$(basename "$REMOTE_DIR")"
+  SITE_NAME="${APP_NAME:-app}.caddy"
+
   SITE_FILE="$(mktemp 2>/dev/null || mktemp -t site-snippet)"
-  sed -e "s|{{DOMAIN}}|$CADDY_DOMAIN|g" -e "s|{{CADDY_DOMAIN}}|$CADDY_DOMAIN|g" "$CADDY_SITE_TEMPLATE" > "$SITE_FILE"
-  echo "==> Writing Caddy site snippet and reloading Caddy"
-  "${SSH_CMD[@]}" "sudo mkdir -p '$CADDY_SITES_DIR' && sudo tee '$CADDY_SITES_DIR/${CADDY_DOMAIN:-app}.caddy' >/dev/null" < "$SITE_FILE"
+  {
+    echo "# zapdeploy:app=$APP_NAME"
+    sed -e "s|{{DOMAIN}}|$CADDY_DOMAIN|g" -e "s|{{CADDY_DOMAIN}}|$CADDY_DOMAIN|g" "$CADDY_SITE_TEMPLATE"
+  } > "$SITE_FILE"
+
+  # Upstream line (whitespace-stripped) — used to detect legacy domain-named
+  # snippets for this same app that predate the marker/stable-name scheme.
+  UPSTREAM_LINE="$(grep -m1 -E '^[[:space:]]*reverse_proxy[[:space:]]' "$SITE_FILE" | tr -d '[:space:]' || true)"
+
+  echo "==> Writing Caddy site snippet ($SITE_NAME -> ${CADDY_DOMAIN:-<no domain>}) and reloading Caddy"
+  "${SSH_CMD[@]}" "sudo mkdir -p '$CADDY_SITES_DIR' && sudo tee '$CADDY_SITES_DIR/$SITE_NAME' >/dev/null" < "$SITE_FILE"
   rm -f "$SITE_FILE"
-  
+
+  # Remove stale snippets for this app: any other *.caddy carrying this app's
+  # marker, or (legacy files) proxying to the same upstream.
+  "${SSH_CMD[@]}" "for f in '$CADDY_SITES_DIR'/*.caddy; do
+      [ -e \"\$f\" ] || continue
+      [ \"\$(basename \"\$f\")\" = '$SITE_NAME' ] && continue
+      if grep -q '^# zapdeploy:app=$APP_NAME\$' \"\$f\" 2>/dev/null; then
+        echo \"    removing stale snippet: \$f\"; sudo rm -f \"\$f\"; continue
+      fi
+      if [ -n '$UPSTREAM_LINE' ] && grep -E '^[[:space:]]*reverse_proxy[[:space:]]' \"\$f\" 2>/dev/null | tr -d '[:space:]' | grep -qxF -- '$UPSTREAM_LINE'; then
+        echo \"    removing stale snippet (same upstream): \$f\"; sudo rm -f \"\$f\"
+      fi
+    done"
+
   if "${SSH_CMD[@]}" "docker inspect --format '{{.State.Status}}' '$CADDY_CONTAINER' 2>/dev/null" | grep -q running; then
     "${SSH_CMD[@]}" "docker exec '$CADDY_CONTAINER' caddy reload --config /etc/caddy/Caddyfile 2>&1 || docker restart '$CADDY_CONTAINER'"
   else
