@@ -65,6 +65,7 @@ CADDY_SITE_TEMPLATE="" ; CADDY_DOMAIN="" ; CADDY_SITES_DIR="/opt/caddy/sites" ; 
 HEALTHCHECK_TYPE="none" ; HEALTHCHECK_TARGET=""
 COMPOSE_FILE_LOCAL="docker-compose.yml"
 UPLOAD_FILES=""
+ENSURE_DIRS=""
 
 while IFS= read -r line || [[ -n "$line" ]]; do
   line="${line#"${line%%[![:space:]]*}"}" # strip leading space
@@ -99,6 +100,7 @@ while IFS= read -r line || [[ -n "$line" ]]; do
       HEALTHCHECK_TARGET)   HEALTHCHECK_TARGET="$value" ;;
       COMPOSE_FILE_LOCAL)   COMPOSE_FILE_LOCAL="$value" ;;
       UPLOAD_FILES)         UPLOAD_FILES="$value" ;;
+      ENSURE_DIRS)          ENSURE_DIRS="$value" ;;
     esac
   fi
 done < "$CONFIG_FILE"
@@ -134,7 +136,7 @@ if [[ -n "$DOPPLER_PROJECT" ]]; then
 fi
 
 # ---- resolve regular properties --------------------------------------------
-for var in SSH_HOST SSH_PORT SSH_USER SSH_KEY REMOTE_DIR IMAGE_REPO DOPPLER_PROJECT DOPPLER_CONFIG INIT_POSTGRES_DSN DOCKER_NETWORK CADDY_SITE_TEMPLATE CADDY_DOMAIN CADDY_SITES_DIR CADDY_CONTAINER HEALTHCHECK_TYPE HEALTHCHECK_TARGET COMPOSE_FILE_LOCAL UPLOAD_FILES; do
+for var in SSH_HOST SSH_PORT SSH_USER SSH_KEY REMOTE_DIR IMAGE_REPO DOPPLER_PROJECT DOPPLER_CONFIG INIT_POSTGRES_DSN DOCKER_NETWORK CADDY_SITE_TEMPLATE CADDY_DOMAIN CADDY_SITES_DIR CADDY_CONTAINER HEALTHCHECK_TYPE HEALTHCHECK_TARGET COMPOSE_FILE_LOCAL UPLOAD_FILES ENSURE_DIRS; do
   val="${!var}"
   if [[ -n "$val" ]]; then
     val="$(resolve_vars "$val")"
@@ -275,13 +277,66 @@ echo "==> Copying compose file"
     IFS=',' read -ra FILES_ARRAY <<< "$UPLOAD_FILES"
     SCP_HOST="$SSH_HOST"
     [[ "$SCP_HOST" == *:* ]] && SCP_HOST="[$SCP_HOST]"
-    for f in "${FILES_ARRAY[@]}"; do
-      f="${f#"${f%%[![:space:]]*}"}"
-      f="${f%"${f##*[![:space:]]}"}"
-      [[ -z "$f" ]] && continue
-      SCP_PORT_ARGS=()
-      [[ -n "$SSH_PORT" ]] && SCP_PORT_ARGS=("-P" "$SSH_PORT")
-      scp "${SCP_PORT_ARGS[@]}" -i "$SSH_KEY_FINAL" -o StrictHostKeyChecking=accept-new -r "$f" "$SSH_USER@$SCP_HOST:$REMOTE_DIR/"
+    SCP_PORT_ARGS=()
+    [[ -n "$SSH_PORT" ]] && SCP_PORT_ARGS=("-P" "$SSH_PORT")
+    for entry in "${FILES_ARRAY[@]}"; do
+      entry="${entry#"${entry%%[![:space:]]*}"}"
+      entry="${entry%"${entry##*[![:space:]]}"}"
+      [[ -z "$entry" ]] && continue
+
+      # Each entry is either:
+      #   src            -> uploads to $REMOTE_DIR/ (backward compatible;
+      #                      works for files and directories via scp -r)
+      #   src:dest       -> uploads a single file to an arbitrary absolute
+      #                      dest path. Creates the dest dir with sudo and
+      #                      writes via `sudo tee` so root-owned targets
+      #                      (e.g. /opt/caddy/pki/agent-ca.crt) work without
+      #                      the SSH user owning the destination. src must be
+      #                      a regular file (not a directory) in this form.
+      src="$entry"
+      dest=""
+      if [[ "$entry" == *:* ]]; then
+        src="${entry%%:*}"
+        dest="${entry#*:}"
+      fi
+      src="${src#"${src%%[![:space:]]*}"}"
+      src="${src%"${src##*[![:space:]]}"}"
+      dest="${dest#"${dest%%[![:space:]]*}"}"
+      dest="${dest%"${dest##*[![:space:]]}"}"
+
+      if [[ -z "$dest" ]]; then
+        scp "${SCP_PORT_ARGS[@]}" -i "$SSH_KEY_FINAL" -o StrictHostKeyChecking=accept-new -r "$src" "$SSH_USER@$SCP_HOST:$REMOTE_DIR/"
+      else
+        [[ -f "$src" ]] || err "UPLOAD_FILES dest-path form requires a regular file (not a directory): '$src'"
+        echo "    $src -> $dest (via sudo)"
+        "${SSH_CMD[@]}" "sudo mkdir -p '$(dirname "$dest")' && sudo tee '$dest' >/dev/null" < "$src"
+      fi
+    done
+  fi
+
+  # ---- ensure mount target dirs exist with required ownership ----------------
+  # Comma-separated entries of `path:owner:group[:mode]`. Owner/group are
+  # numeric uids/gids (or names resolvable on the remote). Mode is optional,
+  # defaults to 755. Example:
+  #   ENSURE_DIRS=/opt/zap-controlplane/artifacts:1000:1000:755
+  if [[ -n "$ENSURE_DIRS" ]]; then
+    echo "==> Ensuring mount target directories exist"
+    IFS=',' read -ra DIRS_ARRAY <<< "$ENSURE_DIRS"
+    for entry in "${DIRS_ARRAY[@]}"; do
+      entry="${entry#"${entry%%[![:space:]]*}"}"
+      entry="${entry%"${entry##*[![:space:]]}"}"
+      [[ -z "$entry" ]] && continue
+
+      # Split on ':'. Expect path:owner:group[:mode].
+      IFS=':' read -r dir owner group mode <<< "$entry"
+      dir="${dir#"${dir%%[![:space:]]*}"}"
+      dir="${dir%"${dir##*[![:space:]]}"}"
+      [[ -n "$dir" ]] || err "ENSURE_DIRS entry '$entry' has no path"
+      [[ -n "$owner" && -n "$group" ]] || err "ENSURE_DIRS entry '$dir' must specify owner:group"
+      [[ -n "$mode" ]] || mode="755"
+
+      echo "    $dir (owner $owner:$group, mode $mode)"
+      "${SSH_CMD[@]}" "sudo mkdir -p '$dir' && sudo chown -R '$owner:$group' '$dir' && sudo chmod '$mode' '$dir'"
     done
   fi
 
