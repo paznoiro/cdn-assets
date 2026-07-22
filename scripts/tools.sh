@@ -12,12 +12,18 @@ pulumi-s3login() {
     echo "🔐 Loading secrets for s3 ($1)..."
     env-setup s3 "$1"
 
-    echo "🔗 Logging into Pulumi backend: $AWS_ENDPOINT_URL"
-    pulumi login "$AWS_ENDPOINT_URL"
+    if [ -z "$S3_BUCKET" ]; then
+        echo "❌ S3_BUCKET not set after env-setup"
+        return 1
+    fi
 
-    echo "📦 Listing Pulumi stacks..."
-    npm run pulumi:list
-
+    echo "🔗 Logging into Pulumi backend: s3://$S3_BUCKET"
+    if [ -n "$AWS_ENDPOINT_URL" ]; then
+        pulumi login "s3://${S3_BUCKET}?endpoint=${AWS_ENDPOINT_URL}&region=${AWS_REGION}&s3ForcePathStyle=true"
+    else
+        pulumi login "s3://${S3_BUCKET}?region=${AWS_REGION}"
+    fi
+    
     echo "✅ pulumi-s3login complete for config: $1"
 }
 pulumi-cleanup() {
