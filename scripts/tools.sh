@@ -95,23 +95,6 @@ pulumi-trash() {
         echo "Deletion cancelled."
     fi
 }
-zapdeploy() {
-  if [ $# -ne 2 ]; then
-    echo "Usage: zapdeploy <service> <env> , Example: zapdeploy production deploy"
-    return 1
-  fi
-
-  local config="$1-api/deploy/$2.conf"
-  if [ ! -f "$config" ]; then
-    echo "❌ Config file not found: $config"
-    return 1
-  fi
-  echo "🚀 Running deploy with config: $config"
-  echo "../deploy-scripts/gcloud-deploy-jib.sh --config $config"
-
-  ./deploy-scripts/gcloud-deploy-jib.sh --config "$config"
-}
-
 export-d1() {
     if [ -z "$1" ]; then
         echo "Usage: export-d1 <stackname>"
