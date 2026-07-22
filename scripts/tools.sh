@@ -89,46 +89,6 @@ zapdeploy() {
   ./deploy-scripts/gcloud-deploy-jib.sh --config "$config"
 }
 
-dbclean() {
-  if [ $# -lt 3 ]; then
-    echo "Usage: dbclean <env> <service> <tenant> [schema]"
-    return 1
-  fi
-
-  local env=$1
-  local service=$2
-  local tenant=$3
-  local schema=${4:-$service}
-
-  ./deploy-scripts/cleanup-tenant.sh \
-    --service "${service}-api" \
-    --conf "${service}-api/deploy/${env}.conf" \
-    --tenant "${tenant}" \
-    --mode single-schema \
-    --schema-name "${schema}"
-}
-
-
-dbmigrate() {
-  if [ $# -lt 3 ]; then
-    echo "Usage: dbmigrate <env> <service> <tenant> [schema]"
-    return 1
-  fi
-
-  local env=$1
-  local service=$2
-  local tenant=$3
-  local schema=${4:-$service}   # default schema = service
-
-  ./deploy-scripts/migrate.sh \
-    --conf ${service}-api/deploy/${env}.conf \
-    --service ${service}-api \
-    --mode single-schema \
-    --schema-name ${schema} \
-    --tenant ${tenant} \
-    --with-seed
-}
-
 export-d1() {
     if [ -z "$1" ]; then
         echo "Usage: export-d1 <stackname>"
@@ -288,43 +248,35 @@ gitinit () {
 
   git status
 }
-claude_lmstudio(){
+claude-lmstudio(){
   export ANTHROPIC_BASE_URL="http://localhost:1234"
   export ANTHROPIC_AUTH_TOKEN="lmstudio"
   echo "Anthropic env enabled"
 }
-claude_zenmux(){
-  export ANTHROPIC_BASE_URL="https://zenmux.ai/api/anthropic"
-  export ANTHROPIC_AUTH_TOKEN=${ZENMUX_API_KEY}
-  echo "Zenmux Anthropic env enabled"
-}
-
-claude_clear(){
+claude-clear(){
   unset ANTHROPIC_BASE_URL
   unset ANTHROPIC_AUTH_TOKEN
   echo "Anthropic env disabled"
 }
-env_setup() {
+env-setup() {
   if [ -z "$1" ] || [ -z "$2" ]; then
-    echo "Usage: env_setup <project> <config>"
+    echo "Usage: env-setup <project> <config>"
     return 1
   fi
-
   set -a
   eval "$(doppler secrets download -p "$1" -c "$2" --format docker --no-file)"
   set +a
-
   doppler secrets --only-names -p "$1" -c "$2"
   echo "✅ Secrets loaded into environment for $1 ($2)"
 }
 
-load_doppler_secrets() {
+load-doppler-secrets() {
     local project="$1"
     local config="$2"
     shift 2
 
     [[ -z "$project" || -z "$config" ]] && {
-        echo "Usage: load_doppler_secrets <project> <config> <secret1> [secret2 ...]"
+        echo "Usage: load-doppler-secrets <project> <config> <secret1> [secret2 ...]"
         return 1
     }
     command -v doppler >/dev/null 2>&1 || {
@@ -346,34 +298,25 @@ load_doppler_secrets() {
     echo "Loaded $# secrets from '$project' ($config)"
 }
 
-cf_setup() {
+cf-setup() {
     local config="$1"
     unset CLOUDFLARE_ACCOUNT_ID
     unset CLOUDFLARE_API_TOKEN
-    load_doppler_secrets cloudflare "$config" \
+    load-doppler-secrets cloudflare "$config" \
         CLOUDFLARE_ACCOUNT_ID \
         CLOUDFLARE_API_TOKEN
 }
 
-gcloud_zap_setup() {
+gcloud-zap-setup() {
     local config="$1"
 
-    load_doppler_secrets gcloud-zap "$config" \
+    load-doppler-secrets gcloud-zap "$config" \
         EMBED_API_KEY \
         LLM_API_KEY \
         POSTGRES_DB_PASS \
         EMPLOYEE_DB_PASS \
         POSTGRES_DB_PASS_SPRING \
         QDRANT_API_KEY
-}
-db_setup() {
-    local config="$1"
-    load_doppler_secrets db "$config" \
-        DB_DIRECT_URL \
-        DB_HOST \
-        DB_JDBC_URL \
-        DB_PWD \
-        DB_USER
 }
 alias docker-restart='pkill -9 Docker com.docker.backend com.docker.virtualization vpnkit dockerd containerd 2>/dev/null; open -a Docker'
 
