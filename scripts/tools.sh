@@ -3,6 +3,23 @@ pulumi-list() {
     echo "npm run pulumi:list";
     npm run pulumi:list;
 }
+pulumi-s3login() {
+    if [ -z "$1" ]; then
+        echo "Usage: pulumi-s3login <config>"
+        return 1
+    fi
+
+    echo "🔐 Loading secrets for s3 ($1)..."
+    env-setup s3 "$1"
+
+    echo "🔗 Logging into Pulumi backend: $AWS_ENDPOINT_URL"
+    pulumi login "$AWS_ENDPOINT_URL"
+
+    echo "📦 Listing Pulumi stacks..."
+    npm run pulumi:list
+
+    echo "✅ pulumi-s3login complete for config: $1"
+}
 pulumi-cleanup() {
     pulumi-list
     STACK="${1:-$(pulumi stack --show-name --cwd pulumi/)}"
