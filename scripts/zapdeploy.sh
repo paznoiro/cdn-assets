@@ -18,23 +18,56 @@ usage() {
   exit 1
 }
 
-# Pure bash resolver (no perl, no eval)
+# Pure bash resolver (no perl, no eval). Single left-to-right pass:
+# substituted values are never re-scanned, so '$' inside values is safe.
+# Supports ${VAR} and $VAR; '$$' is an escaped literal '$'. Referencing an
+# UNDEFINED variable is a hard error (never silently emptied).
 resolve_vars() {
-  local result="$1"
-  local var_name
-  # Resolve ${VAR}
-  while [[ "$result" =~ \$\{([a-zA-Z_][a-zA-Z_0-9]*)\} ]]; do
-    var_name="${BASH_REMATCH[1]}"
-    local val="${!var_name:-}"
-    result="${result//\$\{${var_name}\}/${val}}"
+  local input="$1" out="" var_name rest
+  while [[ -n "$input" ]]; do
+    # No more '$' -> append remainder verbatim and stop.
+    if [[ "$input" != *\$* ]]; then
+      out+="$input"
+      break
+    fi
+    out+="${input%%\$*}"   # literal text before the first '$'
+    rest="${input#*\$}"    # everything after the first '$'
+    case "$rest" in
+      \$*)                      # '$$' -> escaped literal '$'
+        out+='$'
+        input="${rest:1}"
+        ;;
+      \{*)                      # '${VAR}'
+        if [[ "$rest" =~ ^\{([a-zA-Z_][a-zA-Z_0-9]*)\} ]]; then
+          var_name="${BASH_REMATCH[1]}"
+          input="${rest:$(( ${#var_name} + 2 ))}"
+          if [[ -z "${!var_name+x}" ]]; then
+            echo "ERROR: undefined variable '\${$var_name}'" >&2
+            return 1
+          fi
+          out+="${!var_name}"
+        else
+          out+='${'             # malformed '${...' -> keep literal
+          input="${rest:1}"
+        fi
+        ;;
+      [a-zA-Z_]*)               # '$VAR' (greedy match = longest identifier)
+        [[ "$rest" =~ ^([a-zA-Z_][a-zA-Z_0-9]*) ]]
+        var_name="${BASH_REMATCH[1]}"
+        input="${rest:${#var_name}}"
+        if [[ -z "${!var_name+x}" ]]; then
+          echo "ERROR: undefined variable '\$$var_name'" >&2
+          return 1
+        fi
+        out+="${!var_name}"
+        ;;
+      *)                        # lone '$' before punctuation/space -> literal
+        out+='$'
+        input="$rest"
+        ;;
+    esac
   done
-  # Resolve $VAR
-  while [[ "$result" =~ \$([a-zA-Z_][a-zA-Z_0-9]*) ]]; do
-    var_name="${BASH_REMATCH[1]}"
-    local val="${!var_name:-}"
-    result="${result//\$${var_name}/${val}}"
-  done
-  printf "%s" "$result"
+  printf "%s" "$out"
 }
 
 CONFIG_FILE=""
@@ -208,7 +241,9 @@ if [[ -n "$DOCKER_NETWORK" ]]; then
 fi
 
 if [[ -n "$INIT_POSTGRES_DSN" ]]; then
-  DSN="$(resolve_vars "$INIT_POSTGRES_DSN")"
+  # Already resolved in the "resolve regular properties" pass above; resolving
+  # again here would reinterpret '$' characters (e.g. in passwords).
+  DSN="$INIT_POSTGRES_DSN"
   BASE="${DSN%%\?*}"
   PARAMS=""
   [[ "$DSN" == *\?* ]] && PARAMS="?${DSN#*\?}"
