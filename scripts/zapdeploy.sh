@@ -6,6 +6,14 @@
 # Usage:
 #   source /path/to/zapdeploy.sh
 #   zap-docker-deploy <config.properties>
+#
+# The config file is expected at <service-dir>/<deploy-dir>/<file>.properties
+# (e.g. employee-api/deployments/deploy-contabo.properties). The script cds
+# into <service-dir> — inside a child process, so your shell's cwd is never
+# changed — and resolves every relative path in the config against it, so it
+# can be invoked from ANY directory, e.g.:
+#   zap-docker-deploy employee-api/deployments/deploy-contabo.properties
+#   zap-docker-deploy ~/git/zap-erp/erp-api/employee-api/deployments/x.properties
 # ---------------------------------------------------------------------------
 
 zap-docker-deploy() {
@@ -89,6 +97,27 @@ done
 [[ -n "$CONFIG_FILE" ]] || err "config file required."
 [[ -f "$CONFIG_FILE" ]] || err "config file not found: $CONFIG_FILE"
 
+# ---- anchor everything at the service directory ----------------------------
+# Convention: the config lives at <service-dir>/<deploy-dir>/<file>.properties
+# (e.g. employee-api/deployments/deploy-contabo.properties), and every relative
+# path inside it (compose file, caddy template, uploads, ssh key) is relative
+# to <service-dir>. cd into <service-dir> (= parent of the folder holding the
+# config) so the script works no matter where it is invoked from:
+#   zap-docker-deploy employee-api/deployments/x.properties   # from repo root
+#   zap-docker-deploy /abs/path/employee-api/deployments/x.properties
+#   zap-docker-deploy deployments/x.properties                # from service dir
+# This runs in a child process, so the caller's cwd is never changed.
+CONFIG_FILE="$(cd "$(dirname "$CONFIG_FILE")" && pwd -P)/$(basename "$CONFIG_FILE")"
+
+# CLI-supplied paths (--compose/--key) are relative to the CALLER'S cwd, so
+# absolutize them BEFORE we move.
+[[ -n "$COMPOSE_FILE_OVERRIDE" && "$COMPOSE_FILE_OVERRIDE" != /* ]] && COMPOSE_FILE_OVERRIDE="$(pwd)/$COMPOSE_FILE_OVERRIDE"
+[[ -n "$SSH_KEY_OVERRIDE" && "$SSH_KEY_OVERRIDE" != /* ]] && SSH_KEY_OVERRIDE="$(pwd)/$SSH_KEY_OVERRIDE"
+
+SERVICE_DIR="$(dirname "$(dirname "$CONFIG_FILE")")"
+cd "$SERVICE_DIR"
+echo "==> Service directory: $SERVICE_DIR"
+
 # ---- parse properties ------------------------------------------------------
 ENV_LINES=()
 SSH_HOST="" ; SSH_PORT="22" ; SSH_USER="ubuntu" ; SSH_KEY="" ; REMOTE_DIR=""
@@ -157,20 +186,39 @@ if [[ $missing -ne 0 ]]; then
 fi
 
 # ---- load Doppler secrets (optional) ---------------------------------------
+DOPPLER_KEY_NAMES=()
 if [[ -n "$DOPPLER_PROJECT" ]]; then
   [[ -n "${DOPPLER_TOKEN:-}" ]] || err "DOPPLER_TOKEN is not exported"
   echo "==> Fetching secrets from Doppler ($DOPPLER_PROJECT / $DOPPLER_CONFIG)"
   DOPPLER_OUT="$(doppler secrets download -p "$DOPPLER_PROJECT" -c "$DOPPLER_CONFIG" --format docker --no-file)"
   set -a; eval "$DOPPLER_OUT"; set +a
-  
-  # Print Doppler keys successfully loaded (as user requested earlier)
-  doppler secrets --only-names -p "$DOPPLER_PROJECT" -c "$DOPPLER_CONFIG"
+
+  # Collect the secret key names from Doppler. The resolve pass below loops
+  # over these names, so the list of variables lives in Doppler and is not
+  # hardcoded in this script.
+  while IFS= read -r _dkey; do
+    [[ -n "$_dkey" ]] && DOPPLER_KEY_NAMES+=("$_dkey")
+  done < <(doppler secrets --only-names -p "$DOPPLER_PROJECT" -c "$DOPPLER_CONFIG")
+  if [[ ${#DOPPLER_KEY_NAMES[@]} -gt 0 ]]; then
+    printf '  %s\n' "${DOPPLER_KEY_NAMES[@]}"
+  fi
   echo "✅ Secrets loaded into environment for $DOPPLER_PROJECT ($DOPPLER_CONFIG)"
 fi
 
 # ---- resolve regular properties --------------------------------------------
-for var in SSH_HOST SSH_PORT SSH_USER SSH_KEY REMOTE_DIR IMAGE_REPO DOPPLER_PROJECT DOPPLER_CONFIG INIT_POSTGRES_DSN DOCKER_NETWORK CADDY_SITE_TEMPLATE CADDY_DOMAIN CADDY_SITES_DIR CADDY_CONTAINER HEALTHCHECK_TYPE HEALTHCHECK_TARGET COMPOSE_FILE_LOCAL UPLOAD_FILES ENSURE_DIRS; do
-  val="${!var}"
+# Always resolve BOTH the Doppler secret values (they may reference each
+# other) AND the local config keys. Local keys are never Doppler secrets, so
+# restricting resolution to Doppler key names leaves keys like
+#   INIT_POSTGRES_DSN=${DB_DIRECT_URL}/employee?sslmode=require
+# unresolved. Doppler keys go first so local keys see their final values.
+RESOLVE_VARS=(SSH_HOST SSH_PORT SSH_USER SSH_KEY REMOTE_DIR IMAGE_REPO DOPPLER_PROJECT DOPPLER_CONFIG INIT_POSTGRES_DSN DOCKER_NETWORK CADDY_SITE_TEMPLATE CADDY_DOMAIN CADDY_SITES_DIR CADDY_CONTAINER HEALTHCHECK_TYPE HEALTHCHECK_TARGET COMPOSE_FILE_LOCAL UPLOAD_FILES ENSURE_DIRS)
+if [[ ${#DOPPLER_KEY_NAMES[@]} -gt 0 ]]; then
+  RESOLVE_VARS=("${DOPPLER_KEY_NAMES[@]}" "${RESOLVE_VARS[@]}")
+fi
+
+for var in "${RESOLVE_VARS[@]}"; do
+  [[ "$var" =~ ^[a-zA-Z_][a-zA-Z_0-9]*$ ]] || continue
+  val="${!var:-}"
   if [[ -n "$val" ]]; then
     val="$(resolve_vars "$val")"
     eval "$var=\"\$val\""
