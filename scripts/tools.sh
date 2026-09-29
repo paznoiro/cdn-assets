@@ -303,7 +303,7 @@ cf-setup() {
     local config="$1"
     unset CLOUDFLARE_ACCOUNT_ID
     unset CLOUDFLARE_API_TOKEN
-    load-doppler-secrets cloudflare "$config" \
+    load-doppler-secrets general "$config" \
         CLOUDFLARE_ACCOUNT_ID \
         CLOUDFLARE_API_TOKEN
 }
